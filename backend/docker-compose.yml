@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ekyc
+      POSTGRES_PASSWORD: ekyc_password_dev
+      POSTGRES_DB: ekyc_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ekyc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # E-KYC API
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://ekyc:ekyc_password_dev@postgres:5432/ekyc_db
+      
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+      
+      # Application
+      ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+      
+      # Security
+      JWT_SECRET: dev-secret-change-in-production
+      JWT_ALGORITHM: HS256
+      
+      # VerifyMe.ng (use mock for development)
+      VERIFICATION_PROVIDER: mock
+      VERIFYME_SECRET_KEY: test-key
+      VERIFYME_BASE_URL: https://api.verifyme.ng
+      
+      # CORS
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      
+      # Provider timeouts
+      PROVIDER_TIMEOUT_SECONDS: 10
+      PROVIDER_MAX_RETRIES: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app  # Mount app for hot reload in dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  redis_data:
