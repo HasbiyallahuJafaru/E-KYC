@@ -144,6 +144,12 @@ export function IndividualVerificationForm() {
               {result.bvn_data.full_name && (
                 <p><strong>Name:</strong> {result.bvn_data.full_name}</p>
               )}
+              {result.bvn_data.date_of_birth && (
+                <p><strong>Date of Birth:</strong> {result.bvn_data.date_of_birth}</p>
+              )}
+              {result.bvn_data.phone_number && (
+                <p><strong>Phone:</strong> {result.bvn_data.phone_number}</p>
+              )}
             </div>
           )}
 
@@ -155,6 +161,12 @@ export function IndividualVerificationForm() {
               </div>
               {result.nin_data.full_name && (
                 <p><strong>Name:</strong> {result.nin_data.full_name}</p>
+              )}
+              {result.nin_data.date_of_birth && (
+                <p><strong>Date of Birth:</strong> {result.nin_data.date_of_birth}</p>
+              )}
+              {result.nin_data.address && (
+                <p><strong>Address:</strong> {result.nin_data.address}</p>
               )}
             </div>
           )}

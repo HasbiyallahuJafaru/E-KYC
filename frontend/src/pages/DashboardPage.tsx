@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -18,7 +18,6 @@ import { useState } from 'react';
 import { ScrollNavBar } from '@/components/ScrollNavBar';
 
 export function DashboardPage() {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
 
   // Mock data - replace with real API calls

@@ -170,25 +170,47 @@ class CompactReportGenerator:
         ]))
         elements.append(line)
         
-        # Get customer name
+        # Get customer name - prioritize verification data for individuals
         if customer.business_name:
             customer_name = customer.business_name
         elif customer.first_name and customer.last_name:
             customer_name = f"{customer.first_name} {customer.last_name}"
+        elif verification.bvn_name:
+            customer_name = verification.bvn_name
+        elif verification.nin_name:
+            customer_name = verification.nin_name
         else:
             customer_name = "N/A"
         
-        # Info table with better spacing
-        info_data = [
-            [Paragraph("<b>Name:</b>", self.style_label), 
-             Paragraph(customer_name, self.style_value),
-             Paragraph("<b>Type:</b>", self.style_label), 
-             Paragraph(verification.verification_type.value, self.style_value)],
-            [Paragraph("<b>RC Number:</b>", self.style_label), 
-             Paragraph(customer.rc_number or "N/A", self.style_value),
-             Paragraph("<b>Phone:</b>", self.style_label), 
-             Paragraph(customer.phone_number or "N/A", self.style_value)],
-        ]
+        # Determine what to show in the info table based on verification type
+        if verification.verification_type.value == 'INDIVIDUAL':
+            # For individual verification, show BVN/NIN instead of RC number
+            info_data = [
+                [Paragraph("<b>Name:</b>", self.style_label), 
+                 Paragraph(customer_name, self.style_value),
+                 Paragraph("<b>Type:</b>", self.style_label), 
+                 Paragraph(verification.verification_type.value, self.style_value)],
+                [Paragraph("<b>BVN:</b>", self.style_label), 
+                 Paragraph(customer.bvn or "N/A", self.style_value),
+                 Paragraph("<b>NIN:</b>", self.style_label), 
+                 Paragraph(customer.nin or "N/A", self.style_value)],
+                [Paragraph("<b>Date of Birth:</b>", self.style_label), 
+                 Paragraph(verification.bvn_dob or verification.nin_dob or "N/A", self.style_value),
+                 Paragraph("<b>Phone:</b>", self.style_label), 
+                 Paragraph(verification.bvn_phone or customer.phone_number or "N/A", self.style_value)],
+            ]
+        else:
+            # For corporate verification
+            info_data = [
+                [Paragraph("<b>Name:</b>", self.style_label), 
+                 Paragraph(customer_name, self.style_value),
+                 Paragraph("<b>Type:</b>", self.style_label), 
+                 Paragraph(verification.verification_type.value, self.style_value)],
+                [Paragraph("<b>RC Number:</b>", self.style_label), 
+                 Paragraph(customer.rc_number or "N/A", self.style_value),
+                 Paragraph("<b>Phone:</b>", self.style_label), 
+                 Paragraph(customer.phone_number or "N/A", self.style_value)],
+            ]
         
         if customer.email:
             info_data.append([
@@ -209,6 +231,110 @@ class CompactReportGenerator:
         ]))
         
         elements.append(info_table)
+        
+        return elements
+    
+    def _create_individual_verification_section(self, verification: VerificationResult) -> List:
+        """Create BVN/NIN verification details section"""
+        elements = []
+        
+        # Only show for individual verification types
+        if not hasattr(verification, 'bvn_name') or not verification.bvn_name:
+            return elements
+        
+        # Section header
+        elements.append(Paragraph("Identity Verification", self.style_heading))
+        
+        # Underline
+        line = Table([['']], colWidths=[6.2*inch])
+        line.setStyle(TableStyle([
+            ('LINEBELOW', (0, 0), (-1, -1), 1, self.COLORS['gray_light']),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ]))
+        elements.append(line)
+        
+        # BVN and NIN data side by side
+        verification_data = []
+        
+        # Create white text style for headers
+        header_style = ParagraphStyle(
+            'VerificationHeader',
+            parent=self.style_label,
+            textColor=colors.white,
+            fontSize=10,
+            fontName='Helvetica-Bold'
+        )
+        
+        # Headers
+        verification_data.append([
+            Paragraph("BVN Verification", header_style),
+            Paragraph("NIN Verification", header_style),
+        ])
+        
+        # Extract name components from JSONB data
+        bvn_data_json = verification.bvn_data or {}
+        nin_data_json = verification.nin_data or {}
+        
+        # Note: BVN uses camelCase (firstName, middleName, lastName)
+        bvn_first = bvn_data_json.get('firstName', '') or ''
+        bvn_middle = bvn_data_json.get('middleName', '') or ''
+        bvn_last = bvn_data_json.get('lastName', '') or ''
+        
+        # Note: NIN uses lowercase (firstname, middlename) and surname
+        nin_first = nin_data_json.get('firstname', '') or ''
+        nin_middle = nin_data_json.get('middlename', '') or ''
+        nin_last = nin_data_json.get('surname', '') or ''
+        
+        # First Name
+        verification_data.append([
+            Paragraph(f"<b>First Name:</b> {bvn_first or 'N/A'}", self.style_normal),
+            Paragraph(f"<b>First Name:</b> {nin_first or 'N/A'}", self.style_normal),
+        ])
+        
+        # Middle Name
+        verification_data.append([
+            Paragraph(f"<b>Middle Name:</b> {bvn_middle or 'N/A'}", self.style_normal),
+            Paragraph(f"<b>Middle Name:</b> {nin_middle or 'N/A'}", self.style_normal),
+        ])
+        
+        # Last Name
+        verification_data.append([
+            Paragraph(f"<b>Last Name:</b> {bvn_last or 'N/A'}", self.style_normal),
+            Paragraph(f"<b>Last Name:</b> {nin_last or 'N/A'}", self.style_normal),
+        ])
+        
+        # Date of Birth
+        bvn_dob = verification.bvn_dob or "N/A"
+        nin_dob = verification.nin_dob or "N/A"
+        verification_data.append([
+            Paragraph(f"<b>DOB:</b> {bvn_dob}", self.style_normal),
+            Paragraph(f"<b>DOB:</b> {nin_dob}", self.style_normal),
+        ])
+        
+        # Phone (BVN) and Address (NIN)
+        bvn_phone = verification.bvn_phone or "N/A"
+        nin_address = verification.nin_address or "N/A"
+        verification_data.append([
+            Paragraph(f"<b>Phone:</b> {bvn_phone}", self.style_normal),
+            Paragraph(f"<b>Address:</b> {nin_address}", self.style_normal),
+        ])
+        
+        verification_table = Table(verification_data, colWidths=[3.1*inch, 3.1*inch])
+        verification_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), self.COLORS['primary']),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+            ('BOX', (0, 0), (-1, -1), 1, self.COLORS['gray_light']),
+            ('LINEBELOW', (0, 0), (-1, -2), 0.5, self.COLORS['gray_light']),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        
+        elements.append(verification_table)
         
         return elements
     
@@ -620,6 +746,11 @@ class CompactReportGenerator:
         # Customer info
         elements.extend(self._create_info_section(customer, verification))
         elements.append(Spacer(1, 10))
+        
+        # Individual verification details (BVN/NIN)
+        elements.extend(self._create_individual_verification_section(verification))
+        if verification.bvn_name:
+            elements.append(Spacer(1, 10))
         
         # Risk assessment
         if verification.risk_score is not None:
