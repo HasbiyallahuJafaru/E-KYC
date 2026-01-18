@@ -19,7 +19,8 @@ if ($backendRunning) {
     Write-Host "✓ Backend already running on port 8000" -ForegroundColor Green
 } else {
     Write-Host "Starting backend server..." -ForegroundColor Cyan
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\backend'; .\run_backend.ps1"
+    $backendPath = Join-Path $PSScriptRoot "backend"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd `"$backendPath`"; .\run_backend.ps1"
     Write-Host "✓ Backend starting on port 8000" -ForegroundColor Green
     Start-Sleep -Seconds 3
 }
@@ -28,7 +29,8 @@ if ($frontendRunning) {
     Write-Host "✓ Frontend already running on port 5173" -ForegroundColor Green
 } else {
     Write-Host "Starting frontend server..." -ForegroundColor Cyan
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PSScriptRoot\frontend'; .\run_frontend.ps1"
+    $frontendPath = Join-Path $PSScriptRoot "frontend"
+    Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd `"$frontendPath`"; .\run_frontend.ps1"
     Write-Host "✓ Frontend starting on port 5173" -ForegroundColor Green
 }
 

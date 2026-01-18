@@ -12,6 +12,7 @@ from app.core.security import get_api_client
 from app.models.api_client import ApiClient
 from app.models.verification_result import VerificationResult
 from app.services.report_generator import ReportGenerator
+from app.services.report_generator_compact import CompactReportGenerator
 from app.core.exceptions import ResourceNotFoundError
 
 
@@ -67,10 +68,9 @@ async def get_report_pdf(
     db: Session = Depends(get_db)
 ):
     """
-    Get PDF verification report.
+    Get PDF verification report using ReportLab.
     
-    Note: PDF generation requires additional setup.
-    For now, returns HTML with PDF content-type to trigger browser print dialog.
+    Returns a professionally formatted PDF report.
     """
     # Verify ownership
     verification = db.query(VerificationResult).filter(
@@ -84,8 +84,8 @@ async def get_report_pdf(
             detail="Report not found or access denied"
         )
     
-    # Generate PDF
-    generator = ReportGenerator(db)
+    # Generate compact PDF
+    generator = CompactReportGenerator(db)
     
     try:
         pdf_content = await generator.generate_pdf_report(verification_id)
