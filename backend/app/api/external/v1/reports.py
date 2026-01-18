@@ -33,7 +33,7 @@ async def get_report_html(
     # Verify ownership
     verification = db.query(VerificationResult).filter(
         VerificationResult.id == verification_id,
-        VerificationResult.api_client_id == client.id
+        VerificationResult.client_id == client.id
     ).first()
     
     if not verification:

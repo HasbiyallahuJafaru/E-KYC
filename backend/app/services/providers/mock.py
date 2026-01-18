@@ -10,7 +10,9 @@ from app.services.providers.base import (
     NINResult,
     CACResult,
     ShareholderInfo,
-    DirectorInfo
+    DirectorInfo,
+    ProprietorInfo,
+    TrusteeInfo
 )
 from app.core.logging import get_logger
 
@@ -197,21 +199,35 @@ class MockProvider(VerificationProvider):
                 success=True,
                 rc_number=rc_number,
                 company_name="ALPHA TRADING LIMITED",
+                entity_type="LIMITED",
                 company_type="Ltd",
                 status="ACTIVE",
                 incorporation_date="2018-06-12",
                 registered_address="Plot 15, Adeola Odeku Street, Victoria Island, Lagos",
+                city="Lagos",
+                state="Lagos",
+                lga="Lagos Island",
                 share_capital=1000000.00,
+                company_email="info@alphatrading.ng",
+                company_phone="+2341234567890",
                 directors=[
                     DirectorInfo(
                         name="John Paul Obi",
                         position="Managing Director",
-                        appointment_date="2018-06-12"
+                        appointment_date="2018-06-12",
+                        status="ACTIVE",
+                        email="j.obi@alphatrading.ng",
+                        phone="+2348012345678",
+                        address="15 Bourdillon Road, Ikoyi, Lagos"
                     ),
                     DirectorInfo(
                         name="Amaka Nwosu",
                         position="Director",
-                        appointment_date="2018-06-12"
+                        appointment_date="2018-06-12",
+                        status="ACTIVE",
+                        email="a.nwosu@alphatrading.ng",
+                        phone="+2348023456789",
+                        address="8 Queens Drive, Ikoyi, Lagos"
                     )
                 ],
                 shareholders=[
@@ -243,10 +259,13 @@ class MockProvider(VerificationProvider):
                 success=True,
                 rc_number=rc_number,
                 company_name="BETA INDUSTRIES PLC",
+                entity_type="PLC",
                 company_type="PLC",
                 status="ACTIVE",
                 incorporation_date="2015-01-20",
                 registered_address="12 Broad Street, Lagos Island, Lagos",
+                city="Lagos",
+                state="Lagos",
                 share_capital=50000000.00,
                 directors=[
                     DirectorInfo(name="Chukwuma Okafor", position="Chairman"),
@@ -280,17 +299,111 @@ class MockProvider(VerificationProvider):
                 success=True,
                 rc_number=rc_number,
                 company_name="PRECIOUS VENTURES",
+                entity_type="BUSINESS_NAME",
                 company_type="Business Name",
                 status="ACTIVE",
                 incorporation_date="2020-09-05",
+                business_commencement_date="2020-09-15",
                 registered_address="23 Market Road, Aba, Abia State",
-                directors=[
-                    DirectorInfo(name="Precious Okoro", position="Proprietor")
-                ],
-                shareholders=[
-                    ShareholderInfo(name="Precious Okoro", percentage=100.0, is_corporate=False)
+                city="Aba",
+                state="Abia",
+                nature_of_business="General Trading and Commerce",
+                proprietors=[
+                    ProprietorInfo(
+                        name="Precious Okoro",
+                        percentage=100.0,
+                        address="23 Market Road, Aba, Abia State",
+                        nationality="Nigerian"
+                    )
                 ],
                 raw_data={"bn_number": rc_number, "company_type": "BUSINESS NAME"}
+            )
+        
+        # NGO/Incorporated Trustees
+        if rc_number.upper().startswith("IT") or rc_number.upper() == "RC555777":
+            return CACResult(
+                success=True,
+                rc_number=rc_number,
+                company_name="HOPE FOR THE FUTURE FOUNDATION",
+                entity_type="INCORPORATED_TRUSTEES",
+                company_type="NGO",
+                status="ACTIVE",
+                incorporation_date="2017-03-10",
+                registered_address="56 Community Road, Surulere, Lagos",
+                city="Lagos",
+                state="Lagos",
+                aims_and_objectives="To provide educational support and scholarships to underprivileged children in Nigeria",
+                trustees=[
+                    TrusteeInfo(
+                        name="Dr. Folake Adeyemi",
+                        appointment_date="2017-03-10",
+                        address="12 Palm Avenue, Victoria Island, Lagos"
+                    ),
+                    TrusteeInfo(
+                        name="Chief Michael Okonkwo",
+                        appointment_date="2017-03-10",
+                        address="34 Iju Road, Agege, Lagos"
+                    ),
+                    TrusteeInfo(
+                        name="Mrs. Blessing Udo",
+                        appointment_date="2017-03-10",
+                        address="78 Allen Avenue, Ikeja, Lagos"
+                    )
+                ],
+                raw_data={"it_number": rc_number, "company_type": "INCORPORATED TRUSTEES"}
+            )
+        
+        # High-risk company (RC999999) - missing contacts, inactive directors, corporate shareholders
+        if rc_number.upper() == "RC999999":
+            return CACResult(
+                success=True,
+                rc_number=rc_number,
+                company_name="SHELL TRADING COMPANY LIMITED",
+                entity_type="LIMITED",
+                company_type="Ltd",
+                status="ACTIVE",
+                incorporation_date="2023-01-15",
+                registered_address="Suite 405, Plot 789, Abuja",
+                city="Abuja",
+                state="FCT",
+                share_capital=100000.00,
+                company_email=None,  # No company contact
+                company_phone=None,
+                directors=[
+                    DirectorInfo(
+                        name="Unknown Director",
+                        position="Director",
+                        appointment_date="2023-01-15",
+                        status="ACTIVE",
+                        email=None,  # Missing email
+                        phone=None,  # Missing phone
+                        address=None
+                    ),
+                    DirectorInfo(
+                        name="Former Director",
+                        position="Managing Director",
+                        appointment_date="2023-01-15",
+                        status="REMOVED",  # Inactive director
+                        email=None,
+                        phone=None,
+                        address=None
+                    )
+                ],
+                shareholders=[
+                    ShareholderInfo(
+                        name="OFFSHORE HOLDINGS LIMITED",
+                        percentage=95.0,  # High concentration + corporate
+                        is_corporate=True,
+                        corporate_rc="RC888888"
+                    ),
+                    ShareholderInfo(
+                        name="NOMINEE SERVICES LTD",
+                        percentage=5.0,
+                        is_corporate=True,
+                        corporate_rc="RC777777"
+                    )
+                ],
+                raw_data={"rc_number": rc_number, "company_type": "LIMITED BY SHARES"}
             )
         
         # RC not found

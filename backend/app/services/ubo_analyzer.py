@@ -51,6 +51,11 @@ class UBOAnalyzer:
         """
         Analyze CAC result to identify Ultimate Beneficial Owners.
         
+        Handles different entity types:
+        - Limited Companies (Ltd/PLC): Analyze shareholders
+        - Business Names: Analyze proprietors  
+        - NGOs/Incorporated Trustees: Analyze trustees
+        
         Args:
             cac_result: CAC registry lookup result
             depth: Current tracing depth
@@ -59,7 +64,7 @@ class UBOAnalyzer:
         Returns:
             UBOAnalysisResult with identified UBOs and issues
         """
-        logger.info(f"Starting UBO analysis for {cac_result.rc_number} at depth {depth}")
+        logger.info(f"Starting UBO analysis for {cac_result.rc_number} (Type: {cac_result.entity_type}) at depth {depth}")
         
         if visited_rcs is None:
             visited_rcs = set()
@@ -71,54 +76,96 @@ class UBOAnalyzer:
         corporate_shareholders = []
         issues = []
         
-        # Analyze each shareholder
-        for shareholder in cac_result.shareholders:
-            logger.info(f"Analyzing shareholder: {shareholder.name} ({shareholder.percentage}%)")
+        # Determine which ownership structure to analyze based on entity type
+        entity_type = cac_result.entity_type or ""
+        
+        # For Limited Companies and PLCs - analyze shareholders
+        if entity_type in ["LIMITED", "PLC", ""] or cac_result.shareholders:
+            shareholders = cac_result.shareholders or []
             
-            # Check if shareholder meets threshold
-            if shareholder.percentage < self.OWNERSHIP_THRESHOLD:
-                logger.info(f"Skipping {shareholder.name}: below {self.OWNERSHIP_THRESHOLD}% threshold")
-                continue
-            
-            # Individual shareholder = Direct UBO
-            if not shareholder.is_corporate:
-                ubo = UBOEntity(
-                    name=shareholder.name,
-                    ownership_percentage=shareholder.percentage,
-                    ownership_type="DIRECT",
-                    trace_depth=depth
-                )
-                primary_ubos.append(ubo)
-                logger.info(f"Identified direct UBO: {shareholder.name} ({shareholder.percentage}%)")
-            
-            # Corporate shareholder - needs further tracing
-            else:
-                corporate_shareholders.append(shareholder.name)
+            for shareholder in shareholders:
+                logger.info(f"Analyzing shareholder: {shareholder.name} ({shareholder.percentage}%)")
                 
-                # Check for circular ownership
-                if shareholder.corporate_rc in visited_rcs:
-                    issues.append(f"circular_ownership_detected:{shareholder.name}")
-                    logger.warning(f"Circular ownership detected: {shareholder.name}")
+                # Check if shareholder meets threshold
+                if shareholder.percentage < self.OWNERSHIP_THRESHOLD:
+                    logger.info(f"Skipping {shareholder.name}: below {self.OWNERSHIP_THRESHOLD}% threshold")
                     continue
                 
-                # Check if we've hit max depth
-                if depth >= self.MAX_TRACE_DEPTH:
-                    issues.append(f"max_depth_reached:{shareholder.name}")
-                    logger.warning(f"Max trace depth reached for {shareholder.name}")
-                    # Record corporate entity as UBO (unable to trace further)
+                # Individual shareholder = Direct UBO
+                if not shareholder.is_corporate:
                     ubo = UBOEntity(
                         name=shareholder.name,
                         ownership_percentage=shareholder.percentage,
-                        ownership_type="CORPORATE_UNTRACED",
+                        ownership_type="DIRECT",
                         trace_depth=depth
                     )
                     primary_ubos.append(ubo)
-                    continue
+                    logger.info(f"Identified direct UBO: {shareholder.name} ({shareholder.percentage}%)")
                 
-                # TODO: For production, trace corporate shareholders by calling verify_cac again
-                # For now, flag for manual review
-                issues.append(f"corporate_shareholder_requires_tracing:{shareholder.name}")
-                logger.info(f"Corporate shareholder {shareholder.name} requires additional tracing")
+                # Corporate shareholder - needs further tracing
+                else:
+                    corporate_shareholders.append(shareholder.name)
+                    
+                    # Check for circular ownership
+                    if shareholder.corporate_rc in visited_rcs:
+                        issues.append(f"circular_ownership_detected:{shareholder.name}")
+                        logger.warning(f"Circular ownership detected: {shareholder.name}")
+                        continue
+                    
+                    # Check if we've hit max depth
+                    if depth >= self.MAX_TRACE_DEPTH:
+                        issues.append(f"max_depth_reached:{shareholder.name}")
+                        logger.warning(f"Max trace depth reached for {shareholder.name}")
+                        # Record corporate entity as UBO (unable to trace further)
+                        ubo = UBOEntity(
+                            name=shareholder.name,
+                            ownership_percentage=shareholder.percentage,
+                            ownership_type="CORPORATE_UNTRACED",
+                            trace_depth=depth
+                        )
+                        primary_ubos.append(ubo)
+                        continue
+                    
+                    # TODO: For production, trace corporate shareholders by calling verify_cac again
+                    # For now, flag for manual review
+                    issues.append(f"corporate_shareholder_requires_tracing:{shareholder.name}")
+                    logger.info(f"Corporate shareholder {shareholder.name} requires additional tracing")
+        
+        # For Business Names - analyze proprietors
+        elif entity_type == "BUSINESS_NAME" and cac_result.proprietors:
+            for proprietor in cac_result.proprietors:
+                # All proprietors with defined percentage or 100% for sole proprietor
+                percentage = proprietor.percentage or 100.0
+                logger.info(f"Analyzing proprietor: {proprietor.name} ({percentage}%)")
+                
+                if percentage >= self.OWNERSHIP_THRESHOLD:
+                    ubo = UBOEntity(
+                        name=proprietor.name,
+                        ownership_percentage=percentage,
+                        ownership_type="PROPRIETOR",
+                        trace_depth=depth
+                    )
+                    primary_ubos.append(ubo)
+                    logger.info(f"Identified proprietor UBO: {proprietor.name} ({percentage}%)")
+        
+        # For NGOs/Incorporated Trustees - analyze trustees
+        elif entity_type in ["NGO", "INCORPORATED_TRUSTEES"] and cac_result.trustees:
+            # For NGOs, trustees are not traditional UBOs but are key persons of interest
+            # Distribute percentage equally among trustees if not specified
+            trustee_count = len(cac_result.trustees)
+            equal_percentage = 100.0 / trustee_count if trustee_count > 0 else 0
+            
+            for trustee in cac_result.trustees:
+                logger.info(f"Analyzing trustee: {trustee.name}")
+                
+                ubo = UBOEntity(
+                    name=trustee.name,
+                    ownership_percentage=equal_percentage,
+                    ownership_type="TRUSTEE",
+                    trace_depth=depth
+                )
+                primary_ubos.append(ubo)
+                logger.info(f"Identified trustee: {trustee.name}")
         
         # Calculate total percentage identified
         total_percentage = sum(ubo.ownership_percentage for ubo in primary_ubos)
@@ -129,7 +176,7 @@ class UBOAnalyzer:
         if not identified and len(primary_ubos) == 0:
             issues.append("no_ubo_identified")
         
-        if total_percentage < 100 and len(issues) == 0:
+        if total_percentage < 100 and len(issues) == 0 and entity_type in ["LIMITED", "PLC", "BUSINESS_NAME"]:
             issues.append(f"incomplete_ownership_structure:{total_percentage}%")
         
         result = UBOAnalysisResult(

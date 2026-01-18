@@ -115,6 +115,8 @@
   text-decoration: none;
   font-weight: 600;
   transition: all 0.2s;
+  cursor: pointer;
+  font-size: 1rem;
 }
 
 .btn-outline:hover {
@@ -307,6 +309,170 @@
 .required-actions li {
   color: #4a5568;
   margin: 0.5rem 0;
+}
+
+/* Risk Breakdown */
+.risk-breakdown {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #ffffff;
+  border-radius: 6px;
+}
+
+.risk-breakdown h5 {
+  font-size: 1rem;
+  color: #2d3748;
+  margin-bottom: 0.75rem;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #f7fafc;
+  border-radius: 4px;
+  border-left: 3px solid #cbd5e0;
+}
+
+.breakdown-label {
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.breakdown-value {
+  font-weight: 700;
+  color: #2d3748;
+  font-size: 0.95rem;
+}
+
+/* Risk Drivers */
+.risk-drivers {
+  margin-top: 1rem;
+}
+
+.risk-drivers ul {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.risk-drivers li {
+  color: #744210;
+  margin: 0.5rem 0;
+  font-weight: 500;
+}
+
+/* Directors */
+.directors-list,
+.shareholders-list,
+.proprietors-list,
+.trustees-list {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #ffffff;
+  border-radius: 6px;
+}
+
+.directors-list h5,
+.shareholders-list h5,
+.proprietors-list h5,
+.trustees-list h5 {
+  font-size: 1.1rem;
+  color: #2d3748;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0.5rem;
+}
+
+.director-row,
+.shareholder-row,
+.proprietor-row,
+.trustee-row {
+  padding: 1rem;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.director-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.director-name,
+.shareholder-name,
+.proprietor-name,
+.trustee-name {
+  font-weight: 600;
+  color: #2d3748;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-active {
+  background-color: #c6f6d5;
+  color: #22543d;
+}
+
+.status-badge.status-removed,
+.status-badge.status-resigned {
+  background-color: #fed7d7;
+  color: #742a2a;
+}
+
+.corporate-badge {
+  background-color: #bee3f8;
+  color: #2c5282;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.director-contact {
+  color: #718096;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.director-date,
+.trustee-date {
+  color: #a0aec0;
+  font-size: 0.85rem;
+}
+
+.shareholder-row,
+.proprietor-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shareholder-percentage,
+.proprietor-percentage {
+  font-weight: 700;
+  color: #2d3748;
+  font-size: 1.1rem;
 }
 
 .ubos-table {

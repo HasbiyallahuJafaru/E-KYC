@@ -21,6 +21,7 @@ export function IndividualVerificationForm() {
   const [result, setResult] = useState<VerificationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const {
     register,
@@ -55,6 +56,23 @@ export function IndividualVerificationForm() {
     reset();
     setResult(null);
     setError(null);
+  };
+
+  const handlePdfDownload = async () => {
+    if (!result) return;
+    
+    setDownloadingPdf(true);
+    setError(null);
+    
+    try {
+      await apiClient.downloadPdfReport(result.verification_id);
+    } catch (err: any) {
+      console.error('PDF download error:', err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to download PDF';
+      setError(`PDF Download Error: ${errorMsg}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   return (
@@ -156,9 +174,40 @@ export function IndividualVerificationForm() {
             <div className="result-section">
               <h4>Risk Assessment</h4>
               <div className={`risk-score risk-${result.risk_assessment.category.toLowerCase()}`}>
-                <div className="score">{result.risk_assessment.score}/100</div>
-                <div className="category">{result.risk_assessment.category}</div>
+                <div className="score">{result.risk_assessment.score}/30</div>
+                <div className="category">{result.risk_assessment.category} RISK</div>
               </div>
+              
+              {/* Risk Breakdown */}
+              {result.risk_assessment.breakdown && (
+                <div className="risk-breakdown">
+                  <h5>Risk Breakdown (Each category 0-5 points)</h5>
+                  <div className="breakdown-grid">
+                    {Object.entries(result.risk_assessment.breakdown).map(([key, value]) => (
+                      <div key={key} className="breakdown-item">
+                        <span className="breakdown-label">
+                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </span>
+                        <span className="breakdown-value">{value}/5</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Risk Drivers */}
+              {result.risk_assessment.risk_drivers && result.risk_assessment.risk_drivers.length > 0 && (
+                <div className="risk-drivers">
+                  <strong>Risk Drivers:</strong>
+                  <ul>
+                    {result.risk_assessment.risk_drivers.map((driver: string, i: number) => (
+                      <li key={i}>{driver}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {/* Required Actions */}
               {result.risk_assessment.required_actions.length > 0 && (
                 <div className="required-actions">
                   <strong>Required Actions:</strong>
@@ -182,13 +231,13 @@ export function IndividualVerificationForm() {
               >
                 View Report
               </a>
-              <a
-                href={apiClient.getPdfReportUrl(result.verification_id)}
+              <button
+                onClick={handlePdfDownload}
                 className="btn-outline"
-                download
+                disabled={downloadingPdf}
               >
-                Download PDF
-              </a>
+                {downloadingPdf ? 'Downloading...' : 'Download PDF'}
+              </button>
             </div>
           )}
         </div>

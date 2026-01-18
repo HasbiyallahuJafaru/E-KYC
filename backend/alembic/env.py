@@ -23,7 +23,7 @@ from app.models.document import Document
 from app.models.beneficial_owner import BeneficialOwner
 from app.models.audit_log import AuditLog
 from app.models.verification_log import VerificationLog
-from app.models.workflow import WorkflowInstance
+from app.models.workflow import Workflow
 
 # Alembic Config object
 config = context.config

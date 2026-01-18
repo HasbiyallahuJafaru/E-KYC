@@ -20,6 +20,17 @@ class RiskFactors:
     is_pep: bool = False
     source_of_funds_clarity: str = "CLEAR"  # CLEAR, UNCLEAR, SUSPICIOUS
     
+    # Corporate/Entity-specific factors
+    cac_entity_type: Optional[str] = None  # LIMITED, PLC, BUSINESS_NAME, NGO, INCORPORATED_TRUSTEES
+    directors_count: int = 0
+    inactive_directors_count: int = 0  # Directors with REMOVED/RESIGNED status
+    directors_missing_contacts: int = 0  # Directors without email or phone
+    shareholders_count: int = 0
+    corporate_shareholders_count: int = 0
+    ownership_concentration: float = 0.0  # Highest single shareholder percentage
+    ubo_count: int = 0
+    has_incomplete_ownership: bool = False  # Total ownership < 100%
+    
     # Geographic Risk (25%)
     nationality: str = "Nigeria"
     residence_country: str = "Nigeria"
@@ -41,42 +52,45 @@ class RiskFactors:
 @dataclass
 class RiskScore:
     """Complete risk assessment result."""
-    total_score: int  # 0-100
-    category: str  # LOW, MEDIUM, HIGH, PROHIBITED
-    breakdown: dict[str, int]  # Detailed score by component
+    total_score: int  # 1-30
+    category: str  # LOW, MEDIUM, HIGH
+    breakdown: dict[str, int]  # Detailed score by component (each 0-5)
     risk_drivers: list[str]  # Key factors contributing to risk
     required_actions: list[str]  # Compliance actions required
+    calculation_sheet: list[str]  # Human-readable calculation breakdown
 
 
 class RiskEngine:
     """
-    Transparent risk scoring engine with weighted factors.
+    Transparent risk scoring engine using 1-30 scale.
+    Each category contributes 0-5 points for human readability.
     All calculations are explicit and auditable.
     """
     
-    # Risk category thresholds
-    THRESHOLD_LOW = 30
-    THRESHOLD_MEDIUM = 60
-    THRESHOLD_HIGH = 100
-    
-    # Component weights (must sum to 1.0)
-    WEIGHT_CUSTOMER = 0.35
-    WEIGHT_GEOGRAPHIC = 0.25
-    WEIGHT_PRODUCT = 0.20
-    WEIGHT_CHANNEL = 0.20
+    # Risk category thresholds (1-30 scale)
+    THRESHOLD_LOW = 10      # 1-10: Standard Due Diligence
+    THRESHOLD_MEDIUM = 20   # 11-20: Enhanced Monitoring
+    THRESHOLD_HIGH = 30     # 21-30: Enhanced Due Diligence
     
     # High-risk sectors (cash-intensive or high-risk per FATF)
     HIGH_RISK_SECTORS = {
-        "GOLD_TRADING": 30,
-        "CRYPTOCURRENCY": 40,
-        "MONEY_TRANSFER": 35,
-        "REAL_ESTATE": 25,
-        "OIL_GAS": 20,
-        "CONSULTING": 15,
-        "IMPORT_EXPORT": 20,
-        "GAMING_BETTING": 30,
-        "ART_ANTIQUITIES": 25,
-        "PRECIOUS_METALS": 30
+        "SALARY_EARNER": 1,
+        "RETAIL": 1,
+        "CONSULTANCY": 2,
+        "SERVICES": 2,
+        "NGO": 3,
+        "EXPORT": 3,
+        "IMPORT_EXPORT": 3,
+        "LOGISTICS": 3,
+        "GOLD_TRADING": 5,
+        "CRYPTOCURRENCY": 5,
+        "MONEY_TRANSFER": 5,
+        "REAL_ESTATE": 4,
+        "OIL_GAS": 5,
+        "GAMING_BETTING": 5,
+        "ART_ANTIQUITIES": 4,
+        "PRECIOUS_METALS": 5,
+        "CASH_INTENSIVE": 5
     }
     
     # FATF grey/black list countries (as of 2025)
@@ -88,7 +102,8 @@ class RiskEngine:
     
     def calculate_risk(self, factors: RiskFactors) -> RiskScore:
         """
-        Calculate risk score with transparent breakdown.
+        Calculate risk score on 1-30 scale with transparent breakdown.
+        Each category contributes 0-5 points.
         
         Args:
             factors: Risk calculation input factors
@@ -96,245 +111,447 @@ class RiskEngine:
         Returns:
             RiskScore with total score and detailed breakdown
         """
-        logger.info("Calculating risk score")
+        logger.info("Calculating risk score (1-30 scale)")
         
-        # Calculate each component
-        customer_score = self._calculate_customer_risk(factors)
+        # Calculate each category (0-5 points each)
+        customer_score = self._calculate_customer_profile_risk(factors)
         geographic_score = self._calculate_geographic_risk(factors)
+        business_score = self._calculate_business_sector_risk(factors)
+        pep_score = self._calculate_pep_risk(factors)
         product_score = self._calculate_product_risk(factors)
-        channel_score = self._calculate_channel_risk(factors)
+        adverse_score = self._calculate_adverse_media_risk(factors)
         
-        # Apply weights
-        weighted_customer = int(customer_score * self.WEIGHT_CUSTOMER)
-        weighted_geographic = int(geographic_score * self.WEIGHT_GEOGRAPHIC)
-        weighted_product = int(product_score * self.WEIGHT_PRODUCT)
-        weighted_channel = int(channel_score * self.WEIGHT_CHANNEL)
-        
-        # Calculate total
+        # Calculate total (max 30)
         total_score = (
-            weighted_customer +
-            weighted_geographic +
-            weighted_product +
-            weighted_channel
+            customer_score +
+            geographic_score +
+            business_score +
+            pep_score +
+            product_score +
+            adverse_score
         )
         
         # Determine category
         category = self._determine_category(total_score)
         
+        # Build calculation sheet for UI
+        calculation_sheet = self._build_calculation_sheet(
+            customer_score, geographic_score, business_score,
+            pep_score, product_score, adverse_score, factors
+        )
+        
         # Identify risk drivers
         risk_drivers = self._identify_risk_drivers(
-            factors,
-            customer_score,
-            geographic_score,
-            product_score,
-            channel_score
+            factors, customer_score, geographic_score, business_score,
+            pep_score, product_score, adverse_score
         )
         
         # Determine required actions
         required_actions = self._determine_actions(category, factors)
         
         breakdown = {
-            "customer_risk": weighted_customer,
-            "customer_risk_raw": customer_score,
-            "geographic_risk": weighted_geographic,
-            "geographic_risk_raw": geographic_score,
-            "product_risk": weighted_product,
-            "product_risk_raw": product_score,
-            "channel_risk": weighted_channel,
-            "channel_risk_raw": channel_score
+            "customer_profile": customer_score,
+            "geographic_exposure": geographic_score,
+            "business_sector": business_score,
+            "pep_influence": pep_score,
+            "product_relationship": product_score,
+            "adverse_media": adverse_score,
+            "total": total_score
         }
         
-        logger.info(f"Risk calculation complete: {total_score}/100 ({category})")
+        logger.info(f"Risk calculation complete: {total_score}/30 ({category})")
         
         return RiskScore(
             total_score=total_score,
             category=category,
             breakdown=breakdown,
             risk_drivers=risk_drivers,
-            required_actions=required_actions
+            required_actions=required_actions,
+            calculation_sheet=calculation_sheet
         )
     
-    def _calculate_customer_risk(self, factors: RiskFactors) -> int:
-        """Calculate customer risk component (0-100)."""
+    def _calculate_customer_profile_risk(self, factors: RiskFactors) -> int:
+        """
+        Calculate customer profile risk (0-5 points).
+        
+        Scoring:
+        - Nigerian individual: 1
+        - Non-resident Nigerian: 2
+        - Nigerian corporate: 3
+        - Foreign-owned / complex structure: 5
+        """
         score = 0
         
-        # Base score by customer type
         if factors.customer_type == "INDIVIDUAL":
-            score += 0
+            # Nigerian individual
+            if factors.nationality == "Nigeria" and factors.residence_country == "Nigeria":
+                score = 1
+            else:
+                # Non-resident Nigerian
+                score = 2
         elif factors.customer_type == "CORPORATE":
-            score += 10
+            score = 3  # Base for Nigerian corporate
+            
+            # Assess corporate structure complexity
+            if factors.cac_entity_type:
+                # Foreign-owned or complex structure indicators
+                if factors.corporate_shareholders_count > 0:
+                    corp_ratio = factors.corporate_shareholders_count / max(factors.shareholders_count, 1)
+                    if corp_ratio >= 0.8:  # Mostly corporate shareholders
+                        score = 5
+                    elif corp_ratio >= 0.5:
+                        score = 4
+                
+                # Additional complexity factors
+                if factors.directors_count == 0 or factors.ubo_count == 0:
+                    score = max(score, 5)  # Missing governance = complex/opaque
+                elif factors.has_incomplete_ownership:
+                    score = max(score, 4)  # Incomplete ownership = elevated risk
         elif factors.customer_type == "NGO":
-            score += 15
+            score = 3
         elif factors.customer_type == "GOVERNMENT":
+            score = 2
+        
+        return min(score, 5)
+    
+    def _calculate_business_sector_risk(self, factors: RiskFactors) -> int:
+        """
+        Calculate business/sector risk (0-5 points).
+        
+        Scoring:
+        - Salary earner/retail: 1
+        - Consultancy/services: 2
+        - NGO/export/logistics: 3
+        - Cash-intensive (gold, oil, crypto): 5
+        """
+        if not factors.industry_sector:
+            return 1  # Default low if not specified
+        
+        sector_score = self.HIGH_RISK_SECTORS.get(
+            factors.industry_sector.upper(),
+            2  # Default medium for unknown sectors
+        )
+        
+        return min(sector_score, 5)
+    
+    def _calculate_pep_risk(self, factors: RiskFactors) -> int:
+        """
+        Calculate PEP/Influence risk (0-5 points).
+        
+        Scoring:
+        - Not a PEP: 0
+        - Domestic PEP: 3
+        - Foreign PEP: 4
+        - PEP + senior role: 5
+        """
+        if not factors.is_pep:
+            return 0
+        
+        # Base PEP score
+        if factors.nationality != "Nigeria":
+            return 4  # Foreign PEP
+        else:
+            return 3  # Domestic PEP
+        
+        # Note: Senior role detection would require additional field in factors
+    
+    def _calculate_adverse_media_risk(self, factors: RiskFactors) -> int:
+        """
+        Calculate adverse media/watchlist risk (0-5 points).
+        
+        Scoring:
+        - No adverse information: 0
+        - Investigation/allegation: 3
+        - Conviction/confirmed issue: 5
+        
+        Note: Sanctions matches bypass scoring and halt onboarding
+        """
+        # Currently no adverse media data in factors
+        # This would be populated from watchlist screening
+        return 0
+    
+    def _assess_corporate_structure_risk(self, factors: RiskFactors) -> int:
+        """
+        Assess risk based on corporate governance structure.
+        Evaluates directors, shareholders, and ownership transparency.
+        """
+        score = 0
+        
+        # Director-related risks
+        if factors.directors_count == 0:
+            # No directors listed is highly suspicious
+            score += 25
+        elif factors.directors_count == 1:
+            # Single director increases risk (less oversight)
+            score += 10
+        
+        # Inactive/removed directors
+        if factors.inactive_directors_count > 0:
+            if factors.directors_count > 0:
+                inactive_ratio = factors.inactive_directors_count / factors.directors_count
+                if inactive_ratio > 0.5:  # More than 50% inactive
+                    score += 20
+                elif inactive_ratio > 0.3:  # More than 30% inactive
+                    score += 10
+        
+        # Missing director contact information
+        if factors.directors_missing_contacts > 0:
+            if factors.directors_count > 0:
+                missing_ratio = factors.directors_missing_contacts / factors.directors_count
+                if missing_ratio > 0.7:  # More than 70% missing contacts
+                    score += 15
+                elif missing_ratio > 0.4:  # More than 40% missing contacts
+                    score += 8
+        
+        # Shareholder-related risks
+        if factors.shareholders_count == 0 and factors.cac_entity_type in ["LIMITED", "PLC"]:
+            # Limited company with no shareholders is unusual
+            score += 20
+        
+        # Corporate shareholders (potential shell companies)
+        if factors.corporate_shareholders_count > 0:
+            if factors.shareholders_count > 0:
+                corporate_ratio = factors.corporate_shareholders_count / factors.shareholders_count
+                if corporate_ratio == 1.0:  # All corporate shareholders
+                    score += 20
+                elif corporate_ratio > 0.5:  # More than 50% corporate
+                    score += 15
+                elif corporate_ratio > 0:
+                    score += 5
+        
+        # Ownership concentration risk (very high concentration = control risk)
+        if factors.ownership_concentration >= 90.0:
+            score += 10
+        elif factors.ownership_concentration >= 75.0:
             score += 5
         
-        # PEP status (automatic high risk)
-        if factors.is_pep:
-            score += 50
-        
-        # Industry sector risk
-        if factors.industry_sector:
-            sector_risk = self.HIGH_RISK_SECTORS.get(
-                factors.industry_sector.upper(),
-                0
-            )
-            score += sector_risk
-        
-        # Source of funds clarity
-        if factors.source_of_funds_clarity == "UNCLEAR":
+        # Incomplete ownership structure
+        if factors.has_incomplete_ownership:
             score += 15
-        elif factors.source_of_funds_clarity == "SUSPICIOUS":
-            score += 40
         
-        return min(score, 100)
+        # UBO identification issues
+        if factors.ubo_count == 0 and factors.cac_entity_type in ["LIMITED", "PLC"]:
+            # No identified UBOs is a major red flag
+            score += 25
+        
+        return min(score, 50)  # Cap at 50 to allow other factors
     
     def _calculate_geographic_risk(self, factors: RiskFactors) -> int:
-        """Calculate geographic risk component (0-100)."""
-        score = 0
+        """
+        Calculate geographic exposure risk (0-5 points).
         
-        # Nationality risk
-        nationality_upper = factors.nationality.upper()
-        if nationality_upper in self.FATF_BLACK_LIST:
-            return 100  # Auto-prohibit
-        if nationality_upper in self.FATF_GREY_LIST:
-            score += 30
-        elif nationality_upper != "NIGERIA":
-            score += 10
+        Scoring:
+        - Nigeria only: 1
+        - Cross-border exposure: 3
+        - FATF high-risk jurisdiction: 5
+        """
+        score = 1  # Base: Nigeria only
         
-        # Residence country risk
-        residence_upper = factors.residence_country.upper()
-        if residence_upper in self.FATF_BLACK_LIST:
-            return 100
-        if residence_upper in self.FATF_GREY_LIST:
-            score += 20
-        elif residence_upper != "NIGERIA":
-            score += 10
+        # Check if there's cross-border exposure
+        has_cross_border = False
+        if factors.nationality.upper() != "NIGERIA":
+            has_cross_border = True
+        if factors.residence_country.upper() != "NIGERIA":
+            has_cross_border = True
+        if any(c.upper() != "NIGERIA" for c in factors.transaction_countries):
+            has_cross_border = True
         
-        # Transaction countries risk
-        for country in factors.transaction_countries:
-            country_upper = country.upper()
-            if country_upper in self.FATF_BLACK_LIST:
-                return 100
-            if country_upper in self.FATF_GREY_LIST:
-                score += 15
-                break  # Don't stack penalties
+        # FATF black list = auto high risk
+        for location in [factors.nationality, factors.residence_country] + factors.transaction_countries:
+            if location.upper() in self.FATF_BLACK_LIST:
+                return 5
         
-        return min(score, 100)
+        # FATF grey list
+        for location in [factors.nationality, factors.residence_country] + factors.transaction_countries:
+            if location.upper() in self.FATF_GREY_LIST:
+                return 5
+        
+        # Cross-border but not high-risk jurisdictions
+        if has_cross_border:
+            score = 3
+        
+        return min(score, 5)
     
     def _calculate_product_risk(self, factors: RiskFactors) -> int:
-        """Calculate product/service risk component (0-100)."""
-        score = 0
+        """
+        Calculate product/relationship risk (0-5 points).
         
-        # Product type risk
-        product_risks = {
-            "CURRENT_ACCOUNT": 0,
-            "SAVINGS_ACCOUNT": 0,
-            "INTERNATIONAL_TRANSFERS": 20,
-            "PRIVATE_BANKING": 30,
-            "CASH_MANAGEMENT": 25,
-            "TRADE_FINANCE": 15
-        }
-        score += product_risks.get(factors.product_type, 10)
+        Scoring:
+        - Basic account: 1
+        - Corporate account: 2
+        - High transaction limits: 4
+        - Correspondent/nested exposure: 5
+        """
+        score = 1  # Base: basic account
         
-        # Expected turnover risk
+        # Product type assessment
+        if factors.customer_type == "CORPORATE":
+            score = 2  # Corporate account
+        
+        # High transaction limits based on expected turnover
         if factors.expected_turnover > 10_000_000:  # >10M NGN/month
-            score += 25
+            score = 4
         elif factors.expected_turnover > 5_000_000:  # >5M NGN/month
-            score += 15
-        elif factors.expected_turnover > 1_000_000:  # >1M NGN/month
-            score += 5
+            score = max(score, 3)
         
-        # Cash intensity
+        # Cash intensity increases risk
         if factors.cash_intensity == "HIGH":
-            score += 30
+            score = min(score + 2, 5)
         elif factors.cash_intensity == "MEDIUM":
-            score += 15
+            score = min(score + 1, 5)
         
-        return min(score, 100)
+        return min(score, 5)
     
-    def _calculate_channel_risk(self, factors: RiskFactors) -> int:
-        """Calculate delivery channel risk component (0-100)."""
-        score = 0
+    def _build_calculation_sheet(
+        self, customer_score: int, geographic_score: int, business_score: int,
+        pep_score: int, product_score: int, adverse_score: int, factors: RiskFactors
+    ) -> list[str]:
+        """Build human-readable calculation breakdown for UI."""
+        sheet = []
         
-        # Onboarding channel risk
-        channel_risks = {
-            "IN_PERSON": 0,
-            "REMOTE": 20,
-            "INTERMEDIARY": 30,
-            "DIGITAL_ONLY": 25
-        }
-        score += channel_risks.get(factors.onboarding_channel, 15)
+        if customer_score > 0:
+            if factors.customer_type == "INDIVIDUAL":
+                sheet.append(f"Customer Type (Individual): +{customer_score}")
+            elif factors.customer_type == "CORPORATE":
+                sheet.append(f"Customer Type (Corporate): +{customer_score}")
+            elif factors.customer_type == "NGO":
+                sheet.append(f"Customer Type (NGO): +{customer_score}")
         
-        return min(score, 100)
+        if geographic_score > 0:
+            if geographic_score >= 5:
+                sheet.append(f"Geographic Exposure (High-risk jurisdiction): +{geographic_score}")
+            elif geographic_score >= 3:
+                sheet.append(f"Geographic Exposure (Cross-border): +{geographic_score}")
+            else:
+                sheet.append(f"Geographic Exposure (Nigeria only): +{geographic_score}")
+        
+        if business_score > 0:
+            sector = factors.industry_sector or "Unspecified"
+            sheet.append(f"Business Sector ({sector}): +{business_score}")
+        
+        if pep_score > 0:
+            sheet.append(f"PEP Status: +{pep_score}")
+        
+        if product_score > 0:
+            if factors.customer_type == "CORPORATE":
+                sheet.append(f"Product Type (Corporate Account): +{product_score}")
+            else:
+                sheet.append(f"Product Type (Basic Account): +{product_score}")
+        
+        if adverse_score > 0:
+            sheet.append(f"Adverse Media/Watchlist: +{adverse_score}")
+        
+        total = customer_score + geographic_score + business_score + pep_score + product_score + adverse_score
+        sheet.append("-" * 40)
+        sheet.append(f"Total Risk Score: {total}/30")
+        
+        return sheet
+    
+        return sheet
     
     def _determine_category(self, score: int) -> str:
-        """Determine risk category from score."""
-        if score >= 90:
-            return "PROHIBITED"
-        elif score >= self.THRESHOLD_MEDIUM:
-            return "HIGH"
-        elif score >= self.THRESHOLD_LOW:
+        """
+        Determine risk category from score (1-30 scale).
+        
+        1-10: Low Risk (Standard Due Diligence)
+        11-20: Medium Risk (Enhanced Monitoring)
+        21-30: High Risk (Enhanced Due Diligence)
+        """
+        if score <= self.THRESHOLD_LOW:
+            return "LOW"
+        elif score <= self.THRESHOLD_MEDIUM:
             return "MEDIUM"
         else:
-            return "LOW"
+            return "HIGH"
     
     def _identify_risk_drivers(
         self,
         factors: RiskFactors,
         customer_score: int,
         geographic_score: int,
+        business_score: int,
+        pep_score: int,
         product_score: int,
-        channel_score: int
+        adverse_score: int
     ) -> list[str]:
         """Identify key risk drivers for explanation."""
         drivers = []
         
-        if factors.is_pep:
-            drivers.append("Politically Exposed Person (PEP)")
+        # PEP is always a key driver if present
+        if pep_score > 0:
+            drivers.append(f"Politically Exposed Person (PEP) - Score: {pep_score}/5")
         
-        if customer_score >= 30:
-            if factors.industry_sector in self.HIGH_RISK_SECTORS:
-                drivers.append(f"High-risk sector: {factors.industry_sector}")
+        # Geographic risks
+        if geographic_score >= 5:
+            drivers.append(f"High-risk jurisdiction exposure - Score: {geographic_score}/5")
+        elif geographic_score >= 3:
+            drivers.append(f"Cross-border operations - Score: {geographic_score}/5")
         
-        if geographic_score >= 20:
-            if factors.nationality.upper() in self.FATF_GREY_LIST:
-                drivers.append(f"FATF grey-list nationality: {factors.nationality}")
-            if factors.residence_country.upper() in self.FATF_GREY_LIST:
-                drivers.append(f"FATF grey-list residence: {factors.residence_country}")
+        # Business sector risks
+        if business_score >= 5:
+            sector = factors.industry_sector or "Unspecified"
+            drivers.append(f"Cash-intensive sector ({sector}) - Score: {business_score}/5")
+        elif business_score >= 3:
+            sector = factors.industry_sector or "Unspecified"
+            drivers.append(f"Elevated-risk sector ({sector}) - Score: {business_score}/5")
         
-        if product_score >= 25:
-            if factors.cash_intensity == "HIGH":
-                drivers.append("High cash intensity")
+        # Corporate structure risks
+        if factors.customer_type == "CORPORATE" and customer_score >= 4:
+            if factors.corporate_shareholders_count > 0:
+                corp_ratio = factors.corporate_shareholders_count / max(factors.shareholders_count, 1)
+                if corp_ratio >= 0.5:
+                    drivers.append(f"Complex corporate structure - Score: {customer_score}/5")
+            
+            if factors.directors_count == 0 or factors.ubo_count == 0:
+                drivers.append(f"Missing governance information - Score: {customer_score}/5")
+            elif factors.inactive_directors_count > 0:
+                inactive_ratio = factors.inactive_directors_count / max(factors.directors_count, 1)
+                if inactive_ratio > 0.5:
+                    drivers.append(f"High proportion of inactive directors ({inactive_ratio*100:.0f}%) - Score: {customer_score}/5")
+            
+            if factors.directors_missing_contacts > 0:
+                missing_ratio = factors.directors_missing_contacts / max(factors.directors_count, 1)
+                if missing_ratio > 0.4:
+                    drivers.append(f"Missing director contacts ({missing_ratio*100:.0f}%) - Score: {customer_score}/5")
+        
+        # Product/relationship risks
+        if product_score >= 4:
             if factors.expected_turnover > 10_000_000:
-                drivers.append(f"High expected turnover: NGN {factors.expected_turnover:,}/month")
+                drivers.append(f"High transaction volume (NGN {factors.expected_turnover:,}/month) - Score: {product_score}/5")
+            if factors.cash_intensity == "HIGH":
+                drivers.append(f"High cash intensity - Score: {product_score}/5")
         
-        if channel_score >= 20:
-            if factors.onboarding_channel != "IN_PERSON":
-                drivers.append(f"Remote onboarding: {factors.onboarding_channel}")
+        # Adverse media
+        if adverse_score > 0:
+            drivers.append(f"Adverse media/watchlist findings - Score: {adverse_score}/5")
         
         return drivers if drivers else ["Standard risk profile"]
     
     def _determine_actions(self, category: str, factors: RiskFactors) -> list[str]:
-        """Determine required compliance actions based on risk category."""
-        actions = []
+        """
+        Determine required compliance actions based on risk category (1-30 scale).
         
-        if category == "PROHIBITED":
-            actions.append("Account opening PROHIBITED - do not proceed")
-            actions.append("Report to MLRO immediately")
-            return actions
+        Low (1-10): Standard Due Diligence
+        Medium (11-20): Enhanced Monitoring
+        High (21-30): Enhanced Due Diligence
+        """
+        actions = []
         
         if category == "HIGH":
             actions.append("Enhanced Due Diligence (EDD) mandatory")
-            actions.append("Senior management approval required (Zonal Head)")
+            actions.append("Maker + Checker + Approver approval required")
             actions.append("Source of wealth and source of funds documentation required")
             actions.append("Quarterly account review")
             actions.append("Enhanced transaction monitoring")
+            actions.append("Senior management approval (Zonal Head)")
         elif category == "MEDIUM":
-            actions.append("Standard Customer Due Diligence (CDD)")
-            actions.append("Branch Head approval required")
+            actions.append("Enhanced Monitoring required")
+            actions.append("Maker + Checker approval required")
             actions.append("Bi-annual account review")
+            actions.append("Periodic transaction monitoring")
         else:  # LOW
-            actions.append("Simplified Due Diligence permitted")
+            actions.append("Standard Due Diligence (SDD)")
+            actions.append("Maker approval only")
             actions.append("Annual account review")
         
         if factors.is_pep:

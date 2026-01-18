@@ -1,19 +1,24 @@
 # E-KYC Backend Startup Script
-# This script activates the virtual environment and runs the backend server
+# This script runs the backend server from the correct directory
 
 Write-Host "=== E-KYC Backend Startup ===" -ForegroundColor Green
 Write-Host ""
 
-# Activate virtual environment
-Write-Host "Activating virtual environment..." -ForegroundColor Cyan
-& "$PSScriptRoot\venv\Scripts\Activate.ps1"
+# Ensure we're in the backend directory
+Set-Location $PSScriptRoot
 
-if ($LASTEXITCODE -ne 0 -and -not $?) {
-    Write-Host "ERROR: Failed to activate virtual environment" -ForegroundColor Red
+# Path to virtual environment (one level up)
+$venvPath = Join-Path $PSScriptRoot ".." ".venv"
+$pythonExe = Join-Path $venvPath "Scripts" "python.exe"
+
+# Check if Python executable exists
+if (-not (Test-Path $pythonExe)) {
+    Write-Host "ERROR: Virtual environment not found at $venvPath" -ForegroundColor Red
+    Write-Host "Please run: python -m venv .venv" -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "Virtual environment activated!" -ForegroundColor Green
+Write-Host "Using Python: $pythonExe" -ForegroundColor Cyan
 Write-Host ""
 
 # Check if .env exists
@@ -31,5 +36,5 @@ Write-Host ""
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
 
-# Run uvicorn
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Run uvicorn from the backend directory
+& $pythonExe -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

@@ -11,7 +11,9 @@ from app.services.providers.base import (
     NINResult,
     CACResult,
     ShareholderInfo,
-    DirectorInfo
+    DirectorInfo,
+    ProprietorInfo,
+    TrusteeInfo
 )
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -239,6 +241,11 @@ class VerifyMeProvider(VerificationProvider):
         
         Endpoint: POST /v1/verifications/business/cac
         Request: {"rc_number": "RC123456"}
+        
+        Handles different entity types:
+        - Limited Companies (Ltd/PLC): directors, shareholders, share capital
+        - Business Names (BN): proprietors/partners
+        - NGOs/Incorporated Trustees (IT): trustees, aims/objectives
         """
         # Basic validation
         if not rc_number or len(rc_number) < 5:
@@ -261,38 +268,99 @@ class VerifyMeProvider(VerificationProvider):
             # Parse response
             company_data = data.get("data", {})
             
-            # Parse directors
-            directors = []
-            for director_data in company_data.get("directors", []):
-                directors.append(DirectorInfo(
-                    name=director_data.get("name", ""),
-                    position=director_data.get("position", "Director"),
-                    appointment_date=director_data.get("appointmentDate")
-                ))
+            # Determine entity type from response
+            entity_type = company_data.get("entityType", "").upper()
+            company_type = company_data.get("companyType", "")
             
-            # Parse shareholders
-            shareholders = []
-            for shareholder_data in company_data.get("shareholders", []):
-                shareholders.append(ShareholderInfo(
-                    name=shareholder_data.get("name", ""),
-                    percentage=float(shareholder_data.get("percentage", 0)),
-                    is_corporate=shareholder_data.get("type") == "CORPORATE",
-                    corporate_rc=shareholder_data.get("rc_number")
-                ))
+            # Normalize entity type
+            if not entity_type:
+                if "business name" in company_type.lower() or "bn" in company_type.lower():
+                    entity_type = "BUSINESS_NAME"
+                elif "ngo" in company_type.lower():
+                    entity_type = "NGO"
+                elif "incorporated trustees" in company_type.lower() or "it" in rc_number.lower():
+                    entity_type = "INCORPORATED_TRUSTEES"
+                elif "plc" in company_type.lower():
+                    entity_type = "PLC"
+                elif "ltd" in company_type.lower() or "limited" in company_type.lower():
+                    entity_type = "LIMITED"
+                else:
+                    entity_type = "LIMITED"  # Default
             
-            return CACResult(
+            # Parse common fields
+            result = CACResult(
                 success=True,
                 rc_number=rc_number,
                 company_name=company_data.get("companyName", ""),
-                company_type=company_data.get("companyType"),
+                entity_type=entity_type,
+                company_type=company_type,
                 status=company_data.get("status"),
                 incorporation_date=company_data.get("incorporationDate"),
                 registered_address=company_data.get("registeredAddress"),
-                directors=directors,
-                shareholders=shareholders,
-                share_capital=company_data.get("shareCapital"),
+                city=company_data.get("city"),
+                state=company_data.get("state"),
+                lga=company_data.get("lga"),
+                postal_code=company_data.get("postalCode"),
+                branch_address=company_data.get("branchAddress"),
                 raw_data=company_data
             )
+            
+            # Parse entity-specific fields based on type
+            if entity_type in ["LIMITED", "PLC"]:
+                # Parse directors
+                directors = []
+                for director_data in company_data.get("directors", []):
+                    directors.append(DirectorInfo(
+                        name=director_data.get("name", ""),
+                        position=director_data.get("position", "Director"),
+                        appointment_date=director_data.get("appointmentDate")
+                    ))
+                
+                # Parse shareholders
+                shareholders = []
+                for shareholder_data in company_data.get("shareholders", []):
+                    shareholders.append(ShareholderInfo(
+                        name=shareholder_data.get("name", ""),
+                        percentage=float(shareholder_data.get("percentage", 0)),
+                        is_corporate=shareholder_data.get("type") == "CORPORATE",
+                        corporate_rc=shareholder_data.get("rc_number")
+                    ))
+                
+                result.directors = directors
+                result.shareholders = shareholders
+                result.share_capital = company_data.get("shareCapital")
+                result.company_email = company_data.get("email")
+                result.company_phone = company_data.get("phone")
+            
+            elif entity_type == "BUSINESS_NAME":
+                # Parse proprietors/partners
+                proprietors = []
+                for proprietor_data in company_data.get("proprietors", []) or company_data.get("partners", []):
+                    proprietors.append(ProprietorInfo(
+                        name=proprietor_data.get("name", ""),
+                        percentage=proprietor_data.get("percentage"),
+                        address=proprietor_data.get("address"),
+                        nationality=proprietor_data.get("nationality")
+                    ))
+                
+                result.proprietors = proprietors
+                result.business_commencement_date = company_data.get("commencementDate")
+                result.nature_of_business = company_data.get("natureOfBusiness")
+            
+            elif entity_type in ["NGO", "INCORPORATED_TRUSTEES"]:
+                # Parse trustees
+                trustees = []
+                for trustee_data in company_data.get("trustees", []):
+                    trustees.append(TrusteeInfo(
+                        name=trustee_data.get("name", ""),
+                        appointment_date=trustee_data.get("appointmentDate"),
+                        address=trustee_data.get("address")
+                    ))
+                
+                result.trustees = trustees
+                result.aims_and_objectives = company_data.get("aimsAndObjectives")
+            
+            return result
         
         except (CACLookupError, ProviderUnavailableError, ProviderTimeoutError) as e:
             return CACResult(

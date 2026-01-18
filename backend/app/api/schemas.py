@@ -87,23 +87,85 @@ class UBOInfo(BaseModel):
     is_verified: bool = False
 
 
+class DirectorInfo(BaseModel):
+    """Company director information."""
+    name: str
+    position: str
+    appointment_date: Optional[str] = None
+    status: Optional[str] = None  # ACTIVE, REMOVED, RESIGNED
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+class ShareholderInfo(BaseModel):
+    """Shareholder information for limited companies."""
+    name: str
+    percentage: float
+    is_corporate: bool
+    corporate_rc: Optional[str] = None
+
+
+class ProprietorInfo(BaseModel):
+    """Proprietor/partner information for business names."""
+    name: str
+    percentage: Optional[float] = None
+    address: Optional[str] = None
+    nationality: Optional[str] = None
+
+
+class TrusteeInfo(BaseModel):
+    """Trustee information for NGOs/Incorporated Trustees."""
+    name: str
+    appointment_date: Optional[str] = None
+    address: Optional[str] = None
+
+
 class CACData(BaseModel):
-    """CAC registry data."""
+    """CAC registry data with support for different entity types."""
     verified: bool
     company_name: Optional[str] = None
+    entity_type: Optional[str] = None  # LIMITED, PLC, BUSINESS_NAME, NGO, INCORPORATED_TRUSTEES
     incorporation_date: Optional[str] = None
     status: Optional[str] = None
+    registered_address: Optional[str] = None
+    
+    # Fields for Limited Companies (Ltd/PLC)
+    directors: Optional[List[DirectorInfo]] = None
+    shareholders: Optional[List[ShareholderInfo]] = None
+    share_capital: Optional[float] = None
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    
+    # Fields for Business Names
+    proprietors: Optional[List[ProprietorInfo]] = None
+    business_commencement_date: Optional[str] = None
+    nature_of_business: Optional[str] = None
+    
+    # Fields for NGOs/Incorporated Trustees
+    trustees: Optional[List[TrusteeInfo]] = None
+    aims_and_objectives: Optional[str] = None
+    
+    # Common optional fields
+    city: Optional[str] = None
+    state: Optional[str] = None
+    lga: Optional[str] = None
+    postal_code: Optional[str] = None
+    branch_address: Optional[str] = None
+    
+    # UBO analysis (computed from shareholders/proprietors/trustees)
     ubo_count: Optional[int] = None
     ubos: Optional[List[UBOInfo]] = None
 
 
 class RiskAssessment(BaseModel):
-    """Risk assessment result."""
-    score: int = Field(..., ge=0, le=100)
-    category: str  # LOW, MEDIUM, HIGH, PROHIBITED
-    breakdown: dict
+    """Risk assessment result (1-30 scale)."""
+    score: int = Field(..., ge=1, le=30, description="Risk score on 1-30 scale")
+    category: str  # LOW, MEDIUM, HIGH
+    breakdown: dict  # Dict with each category (0-5 points)
     risk_drivers: List[str]
     required_actions: List[str]
+    calculation_sheet: Optional[List[str]] = None  # Human-readable breakdown
 
 
 class VerificationResponse(BaseModel):

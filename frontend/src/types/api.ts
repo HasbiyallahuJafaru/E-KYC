@@ -59,21 +59,79 @@ export interface UBOInfo {
   is_verified: boolean;
 }
 
+export interface DirectorInfo {
+  name: string;
+  position: string;
+  appointment_date?: string;
+  status?: string;  // ACTIVE, REMOVED, RESIGNED
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface ShareholderInfo {
+  name: string;
+  percentage: number;
+  is_corporate: boolean;
+  corporate_rc?: string;
+}
+
+export interface ProprietorInfo {
+  name: string;
+  percentage?: number;
+  address?: string;
+  nationality?: string;
+}
+
+export interface TrusteeInfo {
+  name: string;
+  appointment_date?: string;
+  address?: string;
+}
+
 export interface CACData {
   verified: boolean;
   company_name?: string;
+  entity_type?: 'LIMITED' | 'PLC' | 'BUSINESS_NAME' | 'NGO' | 'INCORPORATED_TRUSTEES';
   incorporation_date?: string;
   status?: string;
+  registered_address?: string;
+  
+  // Fields for Limited Companies (Ltd/PLC)
+  directors?: DirectorInfo[];
+  shareholders?: ShareholderInfo[];
+  share_capital?: number;
+  company_email?: string;
+  company_phone?: string;
+  
+  // Fields for Business Names
+  proprietors?: ProprietorInfo[];
+  business_commencement_date?: string;
+  nature_of_business?: string;
+  
+  // Fields for NGOs/Incorporated Trustees
+  trustees?: TrusteeInfo[];
+  aims_and_objectives?: string;
+  
+  // Common optional fields
+  city?: string;
+  state?: string;
+  lga?: string;
+  postal_code?: string;
+  branch_address?: string;
+  
+  // UBO analysis (computed)
   ubo_count?: number;
   ubos?: UBOInfo[];
 }
 
 export interface RiskAssessment {
-  score: number;
-  category: 'LOW' | 'MEDIUM' | 'HIGH' | 'PROHIBITED';
-  breakdown: Record<string, number>;
+  score: number;  // 1-30 scale
+  category: 'LOW' | 'MEDIUM' | 'HIGH';
+  breakdown: Record<string, number>;  // Each category 0-5 points
   risk_drivers: string[];
   required_actions: string[];
+  calculation_sheet?: string[];  // Human-readable breakdown
 }
 
 export interface VerificationResponse {

@@ -183,8 +183,55 @@ class VerificationOrchestrator:
             verification.cac_verified = True
             verification.cac_data = cac_result.raw_data
             verification.cac_company_name = cac_result.company_name
+            verification.cac_entity_type = cac_result.entity_type
             verification.cac_incorporation_date = cac_result.incorporation_date
             verification.cac_status = cac_result.status
+            verification.cac_registered_address = cac_result.registered_address
+            
+            # Store entity-specific data based on type
+            entity_data = {}
+            if cac_result.entity_type in ["LIMITED", "PLC"]:
+                entity_data["directors"] = [{
+                    "name": d.name,
+                    "position": d.position,
+                    "appointment_date": d.appointment_date,
+                    "status": d.status,
+                    "email": d.email,
+                    "phone": d.phone,
+                    "address": d.address
+                } for d in cac_result.directors] if cac_result.directors else []
+                entity_data["shareholders"] = [{
+                    "name": s.name,
+                    "percentage": s.percentage,
+                    "is_corporate": s.is_corporate,
+                    "corporate_rc": s.corporate_rc
+                } for s in cac_result.shareholders] if cac_result.shareholders else []
+                entity_data["share_capital"] = cac_result.share_capital
+                entity_data["company_email"] = cac_result.company_email
+                entity_data["company_phone"] = cac_result.company_phone
+            elif cac_result.entity_type == "BUSINESS_NAME":
+                entity_data["proprietors"] = [{
+                    "name": p.name,
+                    "percentage": p.percentage,
+                    "address": p.address,
+                    "nationality": p.nationality
+                } for p in cac_result.proprietors] if cac_result.proprietors else []
+                entity_data["business_commencement_date"] = cac_result.business_commencement_date
+                entity_data["nature_of_business"] = cac_result.nature_of_business
+            elif cac_result.entity_type in ["NGO", "INCORPORATED_TRUSTEES"]:
+                entity_data["trustees"] = [{
+                    "name": t.name,
+                    "appointment_date": t.appointment_date,
+                    "address": t.address
+                } for t in cac_result.trustees] if cac_result.trustees else []
+                entity_data["aims_and_objectives"] = cac_result.aims_and_objectives
+            
+            # Add common location data
+            entity_data["city"] = cac_result.city
+            entity_data["state"] = cac_result.state
+            entity_data["lga"] = cac_result.lga
+            
+            verification.cac_entity_data = entity_data
             
             # Perform UBO analysis
             ubo_result = self.ubo_analyzer.analyze(cac_result)
@@ -206,6 +253,35 @@ class VerificationOrchestrator:
                 "total_percentage": ubo_result.total_identified_percentage,
                 "issues": ubo_result.issues
             }
+            
+            # Calculate risk score with corporate structure assessment
+            risk_factors = RiskFactors(
+                customer_type=customer.customer_type.value,
+                occupation=customer.occupation,
+                industry_sector=customer.industry_sector,
+                is_pep=customer.is_pep,
+                nationality=customer.nationality or "Nigeria",
+                residence_country=customer.country or "Nigeria",
+                # Corporate structure factors
+                cac_entity_type=cac_result.entity_type,
+                directors_count=len(cac_result.directors) if cac_result.directors else 0,
+                inactive_directors_count=sum(1 for d in (cac_result.directors or []) if d.status in ["REMOVED", "RESIGNED"]),
+                directors_missing_contacts=sum(1 for d in (cac_result.directors or []) if not d.email and not d.phone),
+                shareholders_count=len(cac_result.shareholders) if cac_result.shareholders else 0,
+                corporate_shareholders_count=sum(1 for s in (cac_result.shareholders or []) if s.is_corporate),
+                ownership_concentration=max([s.percentage for s in (cac_result.shareholders or [])], default=0.0),
+                ubo_count=len(ubo_result.primary_ubos),
+                has_incomplete_ownership=ubo_result.total_identified_percentage < 100.0 if hasattr(ubo_result, 'total_identified_percentage') else False
+            )
+            
+            risk_score = self.risk_engine.calculate_risk(risk_factors)
+            verification.risk_score = risk_score.total_score
+            verification.risk_category = risk_score.category
+            verification.risk_breakdown = risk_score.breakdown
+            
+            # Update customer risk rating
+            customer.risk_score = risk_score.total_score
+            customer.risk_rating = risk_score.category
             
             # Calculate processing time
             processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
@@ -292,8 +368,52 @@ class VerificationOrchestrator:
                 verification.cac_verified = True
                 verification.cac_data = cac_result.raw_data
                 verification.cac_company_name = cac_result.company_name
+                verification.cac_entity_type = cac_result.entity_type
                 verification.cac_incorporation_date = cac_result.incorporation_date
                 verification.cac_status = cac_result.status
+                verification.cac_registered_address = cac_result.registered_address
+                
+                # Store entity-specific data based on type
+                entity_data = {}
+                if cac_result.entity_type in ["LIMITED", "PLC"]:
+                    entity_data["directors"] = [{
+                        "name": d.name,
+                        "position": d.position,
+                        "appointment_date": d.appointment_date,
+                        "status": d.status,
+                        "email": d.email,
+                        "phone": d.phone,
+                        "address": d.address
+                    } for d in cac_result.directors] if cac_result.directors else []
+                    entity_data["shareholders"] = [{
+                        "name": s.name,
+                        "percentage": s.percentage,
+                        "is_corporate": s.is_corporate,
+                        "corporate_rc": s.corporate_rc
+                    } for s in cac_result.shareholders] if cac_result.shareholders else []
+                    entity_data["share_capital"] = cac_result.share_capital
+                elif cac_result.entity_type == "BUSINESS_NAME":
+                    entity_data["proprietors"] = [{
+                        "name": p.name,
+                        "percentage": p.percentage,
+                        "address": p.address,
+                        "nationality": p.nationality
+                    } for p in cac_result.proprietors] if cac_result.proprietors else []
+                    entity_data["business_commencement_date"] = cac_result.business_commencement_date
+                    entity_data["nature_of_business"] = cac_result.nature_of_business
+                elif cac_result.entity_type in ["NGO", "INCORPORATED_TRUSTEES"]:
+                    entity_data["trustees"] = [{
+                        "name": t.name,
+                        "appointment_date": t.appointment_date,
+                        "address": t.address
+                    } for t in cac_result.trustees] if cac_result.trustees else []
+                    entity_data["aims_and_objectives"] = cac_result.aims_and_objectives
+                
+                entity_data["city"] = cac_result.city
+                entity_data["state"] = cac_result.state
+                entity_data["lga"] = cac_result.lga
+                
+                verification.cac_entity_data = entity_data
                 
                 # UBO analysis
                 ubo_result = self.ubo_analyzer.analyze(cac_result)
@@ -311,14 +431,24 @@ class VerificationOrchestrator:
                     "total_percentage": ubo_result.total_identified_percentage
                 }
             
-            # Calculate risk score
+            # Calculate risk score with CAC entity assessment
             risk_factors = RiskFactors(
                 customer_type=customer.customer_type.value,
                 occupation=customer.occupation,
                 industry_sector=customer.industry_sector,
                 is_pep=customer.is_pep,
                 nationality=customer.nationality or "Nigeria",
-                residence_country=customer.country or "Nigeria"
+                residence_country=customer.country or "Nigeria",
+                # Corporate structure factors
+                cac_entity_type=cac_result.entity_type,
+                directors_count=len(cac_result.directors) if cac_result.directors else 0,
+                inactive_directors_count=sum(1 for d in (cac_result.directors or []) if d.status in ["REMOVED", "RESIGNED"]),
+                directors_missing_contacts=sum(1 for d in (cac_result.directors or []) if not d.email and not d.phone),
+                shareholders_count=len(cac_result.shareholders) if cac_result.shareholders else 0,
+                corporate_shareholders_count=sum(1 for s in (cac_result.shareholders or []) if s.is_corporate),
+                ownership_concentration=max([s.percentage for s in (cac_result.shareholders or [])], default=0.0),
+                ubo_count=len(ubo_result.primary_ubos),
+                has_incomplete_ownership=ubo_result.total_identified_percentage < 100.0 if hasattr(ubo_result, 'total_identified_percentage') else False
             )
             
             risk_score = self.risk_engine.calculate_risk(risk_factors)

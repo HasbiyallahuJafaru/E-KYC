@@ -20,6 +20,10 @@ from app.api.schemas import (
     CrossValidationData,
     CACData,
     UBOInfo,
+    DirectorInfo,
+    ShareholderInfo,
+    ProprietorInfo,
+    TrusteeInfo,
     RiskAssessment
 )
 from app.models.api_client import ApiClient
@@ -30,6 +34,80 @@ from app.services.verification_orchestrator import VerificationOrchestrator
 
 
 router = APIRouter(prefix="/verify", tags=["Verification"])
+
+
+def _build_cac_data(verification: VerificationResult) -> CACData:
+    """Build CACData response from VerificationResult with entity-specific fields."""
+    if not verification.cac_verified:
+        return None
+    
+    # Build UBO list
+    ubos = []
+    if verification.ubo_data and "primary_ubos" in verification.ubo_data:
+        ubos = [
+            UBOInfo(
+                name=ubo["name"],
+                ownership_percentage=ubo["ownership_percentage"],
+                ownership_type=ubo["ownership_type"],
+                is_verified=ubo.get("is_verified", False)
+            )
+            for ubo in verification.ubo_data["primary_ubos"]
+        ]
+    
+    # Extract entity-specific data from cac_entity_data JSONB field
+    entity_data = verification.cac_entity_data or {}
+    
+    # Build response with all fields
+    cac_data = CACData(
+        verified=verification.cac_verified,
+        company_name=verification.cac_company_name,
+        entity_type=verification.cac_entity_type,
+        incorporation_date=verification.cac_incorporation_date,
+        status=verification.cac_status,
+        registered_address=verification.cac_registered_address,
+        ubo_count=verification.ubo_count,
+        ubos=ubos
+    )
+    
+    # Add entity-specific fields based on type
+    if verification.cac_entity_type in ["LIMITED", "PLC"]:
+        # Add directors
+        if "directors" in entity_data:
+            cac_data.directors = [
+                DirectorInfo(**d) for d in entity_data["directors"]
+            ]
+        # Add shareholders
+        if "shareholders" in entity_data:
+            cac_data.shareholders = [
+                ShareholderInfo(**s) for s in entity_data["shareholders"]
+            ]
+        cac_data.share_capital = entity_data.get("share_capital")
+        cac_data.company_email = entity_data.get("company_email")
+        cac_data.company_phone = entity_data.get("company_phone")
+    
+    elif verification.cac_entity_type == "BUSINESS_NAME":
+        if "proprietors" in entity_data:
+            cac_data.proprietors = [
+                ProprietorInfo(**p) for p in entity_data["proprietors"]
+            ]
+        cac_data.business_commencement_date = entity_data.get("business_commencement_date")
+        cac_data.nature_of_business = entity_data.get("nature_of_business")
+    
+    elif verification.cac_entity_type in ["NGO", "INCORPORATED_TRUSTEES"]:
+        if "trustees" in entity_data:
+            cac_data.trustees = [
+                TrusteeInfo(**t) for t in entity_data["trustees"]
+            ]
+        cac_data.aims_and_objectives = entity_data.get("aims_and_objectives")
+    
+    # Add common location data
+    cac_data.city = entity_data.get("city")
+    cac_data.state = entity_data.get("state")
+    cac_data.lga = entity_data.get("lga")
+    cac_data.postal_code = entity_data.get("postal_code")
+    cac_data.branch_address = entity_data.get("branch_address")
+    
+    return cac_data
 
 
 @router.post("/individual", response_model=VerificationResponse, status_code=201)
@@ -236,31 +314,11 @@ async def verify_corporate(
         db.add(log)
         db.commit()
         
-        # Build response from verification result
-        ubos = []
-        if result.ubo_data and "primary_ubos" in result.ubo_data:
-            ubos = [
-                UBOInfo(
-                    name=ubo["name"],
-                    ownership_percentage=ubo["ownership_percentage"],
-                    ownership_type=ubo["ownership_type"],
-                    is_verified=ubo.get("is_verified", False)
-                )
-                for ubo in result.ubo_data["primary_ubos"]
-            ]
-        
         response = VerificationResponse(
             verification_id=result.id,
             status=result.status.value,
             verification_type="CORPORATE",
-            cac_data=CACData(
-                verified=result.cac_verified,
-                company_name=result.cac_company_name,
-                incorporation_date=result.cac_incorporation_date,
-                status=result.cac_status,
-                ubo_count=result.ubo_count,
-                ubos=ubos
-            ),
+            cac_data=_build_cac_data(result),
             risk_assessment=RiskAssessment(
                 score=result.risk_score or 0,
                 category=result.risk_category or "UNKNOWN",
@@ -367,28 +425,9 @@ async def get_verification(
             explanation=verification.cross_validation_details or ""
         )
     
-    # Add CAC data if available
+    # Add CAC/UBO data if corporate verification was performed
     if verification.cac_verified:
-        ubos = []
-        if verification.ubo_data and "primary_ubos" in verification.ubo_data:
-            ubos = [
-                UBOInfo(
-                    name=ubo["name"],
-                    ownership_percentage=ubo["ownership_percentage"],
-                    ownership_type=ubo["ownership_type"],
-                    is_verified=ubo.get("is_verified", False)
-                )
-                for ubo in verification.ubo_data["primary_ubos"]
-            ]
-        
-        response.cac_data = CACData(
-            verified=verification.cac_verified,
-            company_name=verification.cac_company_name,
-            incorporation_date=verification.cac_incorporation_date,
-            status=verification.cac_status,
-            ubo_count=verification.ubo_count,
-            ubos=ubos
-        )
+        response.cac_data = _build_cac_data(verification)
     
     # Add risk assessment if available
     if verification.risk_score is not None:

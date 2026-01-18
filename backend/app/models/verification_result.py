@@ -137,6 +137,11 @@ class VerificationResult(TimeStampedModel):
         nullable=True,
         comment="Registered company name from CAC"
     )
+    cac_entity_type = Column(
+        String(50),
+        nullable=True,
+        comment="Entity type: LIMITED, PLC, BUSINESS_NAME, NGO, INCORPORATED_TRUSTEES"
+    )
     cac_incorporation_date = Column(
         String(20),
         nullable=True,
@@ -146,6 +151,16 @@ class VerificationResult(TimeStampedModel):
         String(50),
         nullable=True,
         comment="Company registration status"
+    )
+    cac_registered_address = Column(
+        String(500),
+        nullable=True,
+        comment="Registered office address from CAC"
+    )
+    cac_entity_data = Column(
+        JSONB,
+        nullable=True,
+        comment="Entity-specific data (directors/shareholders for Ltd, proprietors for BN, trustees for NGO)"
     )
     
     # Cross-Validation Results

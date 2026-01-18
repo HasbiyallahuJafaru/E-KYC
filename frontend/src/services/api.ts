@@ -108,6 +108,48 @@ class ApiClient {
   }
 
   /**
+   * Download PDF report with authentication
+   */
+  async downloadPdfReport(verificationId: string): Promise<void> {
+    try {
+      console.log('[PDF Download] Starting download for:', verificationId);
+      
+      const response = await this.client.get(
+        `/api/v1/reports/${verificationId}/pdf`,
+        {
+          responseType: 'blob', // Important for binary data
+        }
+      );
+
+      console.log('[PDF Download] Response received:', {
+        status: response.status,
+        contentType: response.headers['content-type'],
+        size: response.data.size
+      });
+
+      // Create a blob URL and trigger download
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `verification_${verificationId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      
+      console.log('[PDF Download] Download triggered');
+      
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+    } catch (error) {
+      console.error('[PDF Download] Failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update API key (for when user changes it)
    */
   setApiKey(apiKey: string): void {

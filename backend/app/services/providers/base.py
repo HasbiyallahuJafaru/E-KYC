@@ -60,6 +60,27 @@ class DirectorInfo:
     name: str
     position: str
     appointment_date: Optional[str] = None
+    status: Optional[str] = None  # ACTIVE, REMOVED, RESIGNED
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+
+
+@dataclass
+class ProprietorInfo:
+    """Business name proprietor/partner information."""
+    name: str
+    percentage: Optional[float] = None  # For partnerships
+    address: Optional[str] = None
+    nationality: Optional[str] = None
+
+
+@dataclass
+class TrusteeInfo:
+    """NGO/Incorporated Trustee information."""
+    name: str
+    appointment_date: Optional[str] = None
+    address: Optional[str] = None
 
 
 @dataclass
@@ -68,13 +89,35 @@ class CACResult:
     success: bool
     rc_number: str
     company_name: str
-    company_type: Optional[str] = None  # Ltd, PLC, Business Name, NGO
+    entity_type: Optional[str] = None  # LIMITED, PLC, BUSINESS_NAME, NGO, INCORPORATED_TRUSTEES
+    company_type: Optional[str] = None  # Ltd, PLC, Business Name, NGO (for backward compatibility)
     status: Optional[str] = None  # ACTIVE, INACTIVE, DISSOLVED
     incorporation_date: Optional[str] = None  # Format: YYYY-MM-DD
     registered_address: Optional[str] = None
+    
+    # Fields for Limited Companies (Ltd/PLC)
     directors: list[DirectorInfo] = None
     shareholders: list[ShareholderInfo] = None
     share_capital: Optional[float] = None
+    company_email: Optional[str] = None
+    company_phone: Optional[str] = None
+    
+    # Fields for Business Names
+    proprietors: list[ProprietorInfo] = None
+    business_commencement_date: Optional[str] = None
+    nature_of_business: Optional[str] = None
+    
+    # Fields for NGOs/Incorporated Trustees
+    trustees: list[TrusteeInfo] = None
+    aims_and_objectives: Optional[str] = None
+    
+    # Common optional fields
+    city: Optional[str] = None
+    state: Optional[str] = None
+    lga: Optional[str] = None
+    postal_code: Optional[str] = None
+    branch_address: Optional[str] = None
+    
     raw_data: Optional[dict] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
@@ -84,6 +127,10 @@ class CACResult:
             self.directors = []
         if self.shareholders is None:
             self.shareholders = []
+        if self.proprietors is None:
+            self.proprietors = []
+        if self.trustees is None:
+            self.trustees = []
 
 
 class VerificationProvider(ABC):
